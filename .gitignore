@@ -1,0 +1,9 @@
+# Tillfälliga filer och framtida byggresultat
+target/
+tmp/
+.idea/
+.vscode/
+*.iml
+__pycache__/
+.env
+.env.*
