@@ -1,5 +1,3 @@
-package se.inte.kassa;
-
 public final class Money {
     private final long ore;
 
