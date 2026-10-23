@@ -437,4 +437,115 @@ class KassaTest {
             kilogramProduct.validateStockQuantity(null);
         });
     }
+
+    // Cart
+    @Test
+    void cartMergesSameProductId() {
+        Cart cart = new Cart();
+
+        cart.add(bread(), new BigDecimal("2"));
+        cart.add(bread(), new BigDecimal("1"));
+
+        assertEquals(1, cart.lines().size());
+
+        CartLine line = cart.lines().get(0);
+        assertEquals("A", line.product().id());
+        assertEquals(new BigDecimal("3"), line.quantity());
+    }
+
+    @Test
+    void cartStartsEmpty() {
+        Cart cart = new Cart();
+
+        assertTrue(cart.lines().isEmpty());
+    }
+
+    @Test
+    void cartKeepsOtherProductWhenMerging() {
+        Cart cart = new Cart();
+        cart.add(bread(), new BigDecimal("2"));
+        cart.add(candy(), new BigDecimal("0.125"));
+
+        cart.add(bread(), new BigDecimal("1"));
+
+        assertEquals(2, cart.lines().size());
+
+        CartLine breadLine = cart.lines().get(0);
+        CartLine candyLine = cart.lines().get(1);
+
+        assertEquals("A", breadLine.product().id());
+        assertEquals(new BigDecimal("3"), breadLine.quantity());
+
+        assertEquals("B", candyLine.product().id());
+        assertEquals(new BigDecimal("0.125"), candyLine.quantity());
+    }
+
+    @Test
+    void cartAddsWeightsExactly() {
+        Cart cart = new Cart();
+        cart.add(candy(), new BigDecimal("0.1000"));
+
+        cart.add(candy(), new BigDecimal("0.025"));
+
+        assertEquals(1, cart.lines().size());
+
+        BigDecimal total = cart.lines().get(0).quantity();
+        assertEquals(0, new BigDecimal("0.125").compareTo(total));
+    }
+
+    @Test
+    void cartRejectsInvalidPieceQuantitiesWithoutChanges() {
+        Cart cart = new Cart();
+        cart.add(bread(), new BigDecimal("2"));
+        cart.add(candy(), new BigDecimal("0.125"));
+
+        BigDecimal[] invalidQuantities = {
+                BigDecimal.ZERO,
+                new BigDecimal("-1"),
+                new BigDecimal("1.5"),
+                null
+        };
+
+        for (BigDecimal quantity : invalidQuantities) {
+            assertThrows(IllegalArgumentException.class, () -> {
+                cart.add(bread(), quantity);
+            });
+
+            assertEquals(2, cart.lines().size());
+
+            assertEquals("A", cart.lines().get(0).product().id());
+            assertEquals(new BigDecimal("2"), cart.lines().get(0).quantity());
+
+            assertEquals("B", cart.lines().get(1).product().id());
+            assertEquals(new BigDecimal("0.125"), cart.lines().get(1).quantity());
+        }
+    }
+
+    @Test
+    void cartRejectsFractionOfGramWithoutAddingLine() {
+        Cart cart = new Cart();
+        cart.add(bread(), new BigDecimal("2"));
+
+        assertThrows(IllegalArgumentException.class, () -> {
+            cart.add(candy(), new BigDecimal("0.0005"));
+        });
+
+        assertEquals(1, cart.lines().size());
+        assertEquals("A", cart.lines().get(0).product().id());
+        assertEquals(new BigDecimal("2"), cart.lines().get(0).quantity());
+    }
+
+    @Test
+    void cartRejectsNullProductWithoutChanges() {
+        Cart cart = new Cart();
+        cart.add(bread(), new BigDecimal("2"));
+
+        assertThrows(IllegalArgumentException.class, () -> {
+            cart.add(null, BigDecimal.ONE);
+        });
+
+        assertEquals(1, cart.lines().size());
+        assertEquals("A", cart.lines().get(0).product().id());
+        assertEquals(new BigDecimal("2"), cart.lines().get(0).quantity());
+    }
 }
