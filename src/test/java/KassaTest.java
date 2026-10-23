@@ -3,9 +3,176 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class KassaTest {
     // Money
+    @Test
+    void moneyAddsZero() {
+        Money amount = new Money(1000);
+        Money zero = new Money(0);
+
+        Money firstResult = amount.add(zero);
+        Money secondResult = zero.add(amount);
+
+        assertEquals(1000L, firstResult.ore());
+        assertEquals(1000L, secondResult.ore());
+    }
+
+    @Test
+    void moneyAdditionReachesLongMaximum() {
+        Money amount = new Money(Long.MAX_VALUE - 1);
+        Money oneOre = new Money(1);
+
+        Money result = amount.add(oneOre);
+
+        assertEquals(Long.MAX_VALUE, result.ore());
+    }
+
+    @Test
+    void moneyAdditionRejectsOverflow() {
+        Money amount = new Money(Long.MAX_VALUE);
+        Money oneOre = new Money(1);
+
+        assertThrows(ArithmeticException.class, () -> {
+            amount.add(oneOre);
+        });
+
+        assertEquals(Long.MAX_VALUE, amount.ore());
+        assertEquals(1L, oneOre.ore());
+    }
+
+    @Test
+    void moneyAdditionRejectsNull() {
+        Money amount = new Money(1000);
+
+        assertThrows(IllegalArgumentException.class, () -> {
+            amount.add(null);
+        });
+
+        assertEquals(1000L, amount.ore());
+    }
+
+    @Test
+    void moneySubtractsEqualAmounts() {
+        Money amount = new Money(1000);
+        Money other = new Money(1000);
+
+        Money result = amount.subtract(other);
+
+        assertEquals(0L, result.ore());
+    }
+
+    @Test
+    void moneySubtractsZero() {
+        Money amount = new Money(1000);
+        Money zero = new Money(0);
+
+        Money result = amount.subtract(zero);
+
+        assertEquals(1000L, result.ore());
+    }
+
+    @Test
+    void moneySubtractionRejectsNegativeResult() {
+        Money amount = new Money(1000);
+        Money other = new Money(1100);
+
+        assertThrows(IllegalArgumentException.class, () -> {
+            amount.subtract(other);
+        });
+
+        assertEquals(1000L, amount.ore());
+        assertEquals(1100L, other.ore());
+    }
+
+    @Test
+    void moneySubtractionRejectsNull() {
+        Money amount = new Money(1000);
+
+        assertThrows(IllegalArgumentException.class, () -> {
+            amount.subtract(null);
+        });
+
+        assertEquals(1000L, amount.ore());
+    }
+
+    @Test
+    void moneyComparisonHandlesExtremeValues() {
+        Money zero = new Money(0);
+        Money largest = new Money(Long.MAX_VALUE);
+
+        assertTrue(zero.compareTo(largest) < 0);
+        assertTrue(largest.compareTo(zero) > 0);
+    }
+
+    @Test
+    void moneyComparisonRejectsNull() {
+        Money amount = new Money(1000);
+
+        assertThrows(IllegalArgumentException.class, () -> {
+            amount.compareTo(null);
+        });
+
+        assertEquals(1000L, amount.ore());
+    }
+
+    @Test
+    void moneyComparisonDetectsSmallerAmount() {
+        Money amount = new Money(1000);
+        Money other = new Money(1500);
+
+        int result = amount.compareTo(other);
+
+        assertTrue(result < 0);
+        assertEquals(1000L, amount.ore());
+        assertEquals(1500L, other.ore());
+    }
+
+    @Test
+    void moneyComparisonDetectsEqualAmount() {
+        Money amount = new Money(1000);
+        Money other = new Money(1000);
+
+        int result = amount.compareTo(other);
+
+        assertEquals(0, result);
+    }
+
+    @Test
+    void moneyComparisonDetectsGreaterAmount() {
+        Money amount = new Money(1500);
+        Money other = new Money(1000);
+
+        int result = amount.compareTo(other);
+
+        assertTrue(result > 0);
+    }
+
+    @Test
+    void moneyAddsAmounts() {
+        Money amount = new Money(1000);
+        Money other = new Money(500);
+
+        Money result = amount.add(other);
+
+        assertEquals(1500L, result.ore());
+        assertEquals(1000L, amount.ore());
+        assertEquals(500L, other.ore());
+    }
+
+    @Test
+    void moneySubtractsAmounts() {
+        Money amount = new Money(1000);
+        Money other = new Money(400);
+
+        Money result = amount.subtract(other);
+
+        assertEquals(600L, result.ore());
+        assertEquals(1000L, amount.ore());
+        assertEquals(400L, other.ore());
+    }
+
     @Test
     void zeroOreCanBeCreatedAndRead() {
         Money money = new Money(0);
