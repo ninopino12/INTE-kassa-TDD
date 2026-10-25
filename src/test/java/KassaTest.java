@@ -1,4 +1,6 @@
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -776,5 +778,133 @@ class KassaTest {
         });
 
         assertEquals(new BigDecimal("5"), inventory.stock("A"));
+    }
+
+    // Prices
+    @Test
+    void priceCalculatorCalculatesPieceAndWeightPrices() {
+        Cart cart = new Cart();
+        cart.add(bread(), new BigDecimal("2"));
+        cart.add(candy(), new BigDecimal("0.125"));
+        PriceCalculator calculator = new PriceCalculator();
+
+        PriceResult result = calculator.calculate(cart.lines());
+
+        assertEquals(2500L, result.total().ore());
+        assertEquals(2, result.lines().size());
+
+        PricedLine breadLine = result.lines().get(0);
+        assertEquals("A", breadLine.product().id());
+        assertEquals(new BigDecimal("2"), breadLine.quantity());
+        assertEquals(2000L, breadLine.originalPrice().ore());
+        assertEquals(0L, breadLine.discount().ore());
+        assertEquals(2000L, breadLine.finalPrice().ore());
+
+        PricedLine candyLine = result.lines().get(1);
+        assertEquals("B", candyLine.product().id());
+        assertEquals(new BigDecimal("0.125"), candyLine.quantity());
+        assertEquals(500L, candyLine.originalPrice().ore());
+        assertEquals(0L, candyLine.discount().ore());
+        assertEquals(500L, candyLine.finalPrice().ore());
+    }
+
+    @Test
+    void priceCalculatorHandlesEmptyCart() {
+        Cart cart = new Cart();
+        PriceCalculator calculator = new PriceCalculator();
+
+        PriceResult result = calculator.calculate(cart.lines());
+
+        assertEquals(0L, result.total().ore());
+        assertTrue(result.lines().isEmpty());
+    }
+
+    @Test
+    void priceCalculatorKeepsPreviousResultWhenCartChanges() {
+        Cart cart = new Cart();
+        cart.add(bread(), new BigDecimal("2"));
+        PriceCalculator calculator = new PriceCalculator();
+        PriceResult previous = calculator.calculate(cart.lines());
+
+        cart.add(bread(), BigDecimal.ONE);
+        PriceResult current = calculator.calculate(cart.lines());
+
+        assertEquals(2000L, previous.total().ore());
+        assertEquals(new BigDecimal("2"), previous.lines().get(0).quantity());
+        assertEquals(2000L, previous.lines().get(0).finalPrice().ore());
+
+        assertEquals(3000L, current.total().ore());
+        assertEquals(new BigDecimal("3"), current.lines().get(0).quantity());
+    }
+
+    @Test
+    void priceResultProtectsItsLines() {
+        Cart cart = new Cart();
+        cart.add(bread(), BigDecimal.ONE);
+        PriceCalculator calculator = new PriceCalculator();
+        PriceResult result = calculator.calculate(cart.lines());
+
+        assertThrows(UnsupportedOperationException.class, () -> {
+            result.lines().clear();
+        });
+
+        assertEquals(1, result.lines().size());
+        assertEquals(1000L, result.total().ore());
+    }
+
+    @Test
+    void priceResultCopiesSuppliedLines() {
+        PricedLine line = new PricedLine(bread(), BigDecimal.ONE,
+                new Money(1000), new Money(0));
+        List<PricedLine> lines = new ArrayList<>();
+        lines.add(line);
+        PriceResult result = new PriceResult(lines);
+
+        lines.clear();
+
+        assertEquals(1, result.lines().size());
+        assertEquals("A", result.lines().get(0).product().id());
+        assertEquals(1000L, result.total().ore());
+    }
+
+    @Test
+    void priceResultUsesFinalPricesForTotal() {
+        PricedLine breadLine = new PricedLine(bread(), new BigDecimal("3"),
+                new Money(3000), new Money(600));
+        PricedLine candyLine = new PricedLine(candy(), new BigDecimal("0.125"),
+                new Money(500), new Money(0));
+
+        PriceResult result = new PriceResult(List.of(breadLine, candyLine));
+
+        assertEquals(2400L, breadLine.finalPrice().ore());
+        assertEquals(600L, breadLine.discount().ore());
+        assertEquals(2900L, result.total().ore());
+    }
+
+    @Test
+    void priceCalculatorRejectsMissingInput() {
+        PriceCalculator calculator = new PriceCalculator();
+
+        assertThrows(IllegalArgumentException.class, () -> {
+            calculator.calculate(null);
+        });
+
+        List<CartLine> lines = new ArrayList<>();
+        lines.add(null);
+
+        assertThrows(IllegalArgumentException.class, () -> {
+            calculator.calculate(lines);
+        });
+    }
+
+    @Test
+    void pricedLineRejectsDiscountLargerThanPrice() {
+        Product product = bread();
+        Money originalPrice = new Money(1000);
+        Money discount = new Money(1001);
+
+        assertThrows(IllegalArgumentException.class, () -> {
+            new PricedLine(product, BigDecimal.ONE, originalPrice, discount);
+        });
     }
 }
