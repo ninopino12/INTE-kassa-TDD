@@ -548,4 +548,77 @@ class KassaTest {
         assertEquals("A", cart.lines().get(0).product().id());
         assertEquals(new BigDecimal("2"), cart.lines().get(0).quantity());
     }
+
+    // Checkout
+    @Test
+    void checkoutStartsShoppingAfterFirstProduct() {
+        Checkout checkout = new Checkout();
+
+        checkout.add(bread(), new BigDecimal("2"));
+
+        assertEquals(CheckoutState.SHOPPING, checkout.state());
+        assertEquals(1, checkout.lines().size());
+        assertEquals("A", checkout.lines().get(0).product().id());
+        assertEquals(new BigDecimal("2"), checkout.lines().get(0).quantity());
+    }
+        @Test
+    void checkoutStartsEmpty() {
+        Checkout checkout = new Checkout();
+
+        assertEquals(CheckoutState.EMPTY, checkout.state());
+        assertTrue(checkout.lines().isEmpty());
+    }
+
+    @Test
+    void checkoutAddsProductsWhileShopping() {
+        Checkout checkout = new Checkout();
+        checkout.add(bread(), new BigDecimal("2"));
+
+        checkout.add(candy(), new BigDecimal("0.125"));
+        checkout.add(bread(), new BigDecimal("1"));
+
+        assertEquals(CheckoutState.SHOPPING, checkout.state());
+        assertEquals(2, checkout.lines().size());
+
+        CartLine breadLine = checkout.lines().get(0);
+        CartLine candyLine = checkout.lines().get(1);
+
+        assertEquals("A", breadLine.product().id());
+        assertEquals(new BigDecimal("3"), breadLine.quantity());
+
+        assertEquals("B", candyLine.product().id());
+        assertEquals(new BigDecimal("0.125"), candyLine.quantity());
+    }
+
+    @Test
+    void checkoutRejectsInvalidFirstProductWithoutChangingState() {
+        Checkout checkout = new Checkout();
+
+        assertThrows(IllegalArgumentException.class, () -> {
+            checkout.add(bread(), new BigDecimal("1.5"));
+        });
+
+        assertEquals(CheckoutState.EMPTY, checkout.state());
+        assertTrue(checkout.lines().isEmpty());
+    }
+
+    @Test
+    void checkoutRejectsInvalidAdditionWithoutChangingPurchase() {
+        Checkout checkout = new Checkout();
+        checkout.add(bread(), new BigDecimal("2"));
+        checkout.add(candy(), new BigDecimal("0.125"));
+
+        assertThrows(IllegalArgumentException.class, () -> {
+            checkout.add(bread(), new BigDecimal("-1"));
+        });
+
+        assertEquals(CheckoutState.SHOPPING, checkout.state());
+        assertEquals(2, checkout.lines().size());
+
+        assertEquals("A", checkout.lines().get(0).product().id());
+        assertEquals(new BigDecimal("2"), checkout.lines().get(0).quantity());
+
+        assertEquals("B", checkout.lines().get(1).product().id());
+        assertEquals(new BigDecimal("0.125"), checkout.lines().get(1).quantity());
+    }
 }
