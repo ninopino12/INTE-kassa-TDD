@@ -621,4 +621,160 @@ class KassaTest {
         assertEquals("B", checkout.lines().get(1).product().id());
         assertEquals(new BigDecimal("0.125"), checkout.lines().get(1).quantity());
     }
+
+    // Inventory
+    @Test
+    void inventoryRestockAddsToExistingStock() {
+        Inventory inventory = new Inventory();
+        inventory.register(bread(), new BigDecimal("5"));
+        inventory.register(candy(), new BigDecimal("0.500"));
+
+        inventory.restock("A", new BigDecimal("2"));
+
+        assertEquals(new BigDecimal("7"), inventory.stock("A"));
+        assertEquals(new BigDecimal("0.500"), inventory.stock("B"));
+    }
+
+    @Test
+    void inventoryRestocksKilogramsExactly() {
+        Inventory inventory = new Inventory();
+        inventory.register(candy(), new BigDecimal("0.5000"));
+
+        inventory.restock("B", new BigDecimal("0.125"));
+
+        assertEquals(0, new BigDecimal("0.625").compareTo(inventory.stock("B")));
+    }
+
+    @Test
+    void inventoryAllowsZeroInitialStockAndLaterRestocking() {
+        Inventory inventory = new Inventory();
+        inventory.register(bread(), BigDecimal.ZERO);
+        inventory.register(candy(), new BigDecimal("0.0000"));
+
+        assertEquals(0, inventory.stock("A").signum());
+        assertEquals(0, inventory.stock("B").signum());
+
+        inventory.restock("A", new BigDecimal("2"));
+        inventory.restock("B", new BigDecimal("0.125"));
+
+        assertEquals(new BigDecimal("2"), inventory.stock("A"));
+        assertEquals(0, new BigDecimal("0.125").compareTo(inventory.stock("B")));
+    }
+
+    @Test
+    void inventoryRejectsDuplicateRegistrationWithoutChangingStock() {
+        Inventory inventory = new Inventory();
+        inventory.register(bread(), new BigDecimal("5"));
+        inventory.register(candy(), new BigDecimal("0.500"));
+
+        assertThrows(IllegalArgumentException.class, () -> {
+            inventory.register(bread(), new BigDecimal("2"));
+        });
+
+        assertEquals(new BigDecimal("5"), inventory.stock("A"));
+        assertEquals(new BigDecimal("0.500"), inventory.stock("B"));
+    }
+
+    @Test
+    void inventoryRejectsInvalidInitialPieceStockWithoutCreatingEntry() {
+        BigDecimal[] invalidQuantities = {
+                new BigDecimal("-1"),
+                new BigDecimal("1.5"),
+                null
+        };
+
+        for (BigDecimal quantity : invalidQuantities) {
+            Inventory inventory = new Inventory();
+
+            assertThrows(IllegalArgumentException.class, () -> {
+                inventory.register(bread(), quantity);
+            });
+            assertThrows(IllegalArgumentException.class, () -> {
+                inventory.stock("A");
+            });
+
+            inventory.register(bread(), new BigDecimal("5"));
+            assertEquals(new BigDecimal("5"), inventory.stock("A"));
+        }
+    }
+
+    @Test
+    void inventoryRejectsInvalidInitialWeightWithoutCreatingEntry() {
+        Inventory inventory = new Inventory();
+        inventory.register(bread(), new BigDecimal("5"));
+
+        assertThrows(IllegalArgumentException.class, () -> {
+            inventory.register(candy(), new BigDecimal("0.0005"));
+        });
+        assertThrows(IllegalArgumentException.class, () -> {
+            inventory.stock("B");
+        });
+
+        assertEquals(new BigDecimal("5"), inventory.stock("A"));
+
+        inventory.register(candy(), new BigDecimal("0.500"));
+        assertEquals(new BigDecimal("0.500"), inventory.stock("B"));
+    }
+
+    @Test
+    void inventoryRejectsInvalidPieceRestockingWithoutChanges() {
+        Inventory inventory = new Inventory();
+        inventory.register(bread(), new BigDecimal("5"));
+        inventory.register(candy(), new BigDecimal("0.500"));
+
+        BigDecimal[] invalidQuantities = {
+                BigDecimal.ZERO,
+                new BigDecimal("-1"),
+                new BigDecimal("1.5"),
+                null
+        };
+
+        for (BigDecimal quantity : invalidQuantities) {
+            assertThrows(IllegalArgumentException.class, () -> {
+                inventory.restock("A", quantity);
+            });
+
+            assertEquals(new BigDecimal("5"), inventory.stock("A"));
+            assertEquals(new BigDecimal("0.500"), inventory.stock("B"));
+        }
+    }
+
+    @Test
+    void inventoryRejectsFractionOfGramWhenRestocking() {
+        Inventory inventory = new Inventory();
+        inventory.register(candy(), new BigDecimal("0.500"));
+
+        assertThrows(IllegalArgumentException.class, () -> {
+            inventory.restock("B", new BigDecimal("0.0005"));
+        });
+
+        assertEquals(new BigDecimal("0.500"), inventory.stock("B"));
+    }
+
+    @Test
+    void inventoryRejectsUnknownIdWithoutChangingKnownStock() {
+        Inventory inventory = new Inventory();
+        inventory.register(bread(), new BigDecimal("5"));
+
+        assertThrows(IllegalArgumentException.class, () -> {
+            inventory.stock("missing");
+        });
+        assertThrows(IllegalArgumentException.class, () -> {
+            inventory.restock("missing", BigDecimal.ONE);
+        });
+
+        assertEquals(new BigDecimal("5"), inventory.stock("A"));
+    }
+
+    @Test
+    void inventoryRejectsNullProductWithoutChangingStock() {
+        Inventory inventory = new Inventory();
+        inventory.register(bread(), new BigDecimal("5"));
+
+        assertThrows(IllegalArgumentException.class, () -> {
+            inventory.register(null, BigDecimal.ONE);
+        });
+
+        assertEquals(new BigDecimal("5"), inventory.stock("A"));
+    }
 }
