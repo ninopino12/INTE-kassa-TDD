@@ -625,6 +625,117 @@ class KassaTest {
         assertEquals(new BigDecimal("0.125"), checkout.lines().get(1).quantity());
     }
 
+    // Checkout payment phase
+    @Test
+    void checkoutBeginsPaymentWithoutEmptyingCart() {
+        Checkout checkout = new Checkout();
+        checkout.add(bread(), new BigDecimal("2"));
+
+        PriceResult result = checkout.beginPayment();
+
+        assertEquals(CheckoutState.PAYMENT, checkout.state());
+        assertEquals(2000L, result.total().ore());
+        assertEquals(1, checkout.lines().size());
+        assertEquals(new BigDecimal("2"), checkout.lines().get(0).quantity());
+    }
+
+    @Test
+    void checkoutRejectsChangesAndRepeatedPaymentStartWhilePaying() {
+        Checkout checkout = new Checkout();
+        checkout.add(bread(), new BigDecimal("3"));
+        checkout.add(candy(), new BigDecimal("0.125"));
+        PriceResult frozen = checkout.beginPayment();
+
+        assertThrows(IllegalStateException.class, () -> {
+            checkout.add(bread(), BigDecimal.ONE);
+        });
+        assertThrows(IllegalStateException.class, () -> {
+            checkout.changeQuantity("A", BigDecimal.ONE);
+        });
+        assertThrows(IllegalStateException.class, () -> {
+            checkout.remove("A", new BigDecimal("3"));
+        });
+        assertThrows(IllegalStateException.class, () -> {
+            checkout.beginPayment();
+        });
+
+        assertEquals(CheckoutState.PAYMENT, checkout.state());
+        assertEquals(2, checkout.lines().size());
+        assertEquals(new BigDecimal("3"), checkout.lines().get(0).quantity());
+        assertEquals(new BigDecimal("0.125"), checkout.lines().get(1).quantity());
+        assertEquals(3500L, frozen.total().ore());
+    }
+
+    @Test
+    void checkoutRecalculatesAfterReturningAndEditingPurchase() {
+        Checkout checkout = new Checkout();
+        checkout.add(bread(), new BigDecimal("3"));
+        checkout.add(candy(), new BigDecimal("0.125"));
+        PriceResult previous = checkout.beginPayment();
+
+        checkout.returnToShopping();
+        assertEquals(CheckoutState.SHOPPING, checkout.state());
+
+        checkout.changeQuantity("A", new BigDecimal("4"));
+        checkout.remove("A", new BigDecimal("2"));
+        assertEquals(CheckoutState.SHOPPING, checkout.state());
+
+        PriceResult current = checkout.beginPayment();
+
+        assertEquals(CheckoutState.PAYMENT, checkout.state());
+        assertEquals(2500L, current.total().ore());
+        assertEquals(new BigDecimal("2"), current.lines().get(0).quantity());
+        assertEquals(3500L, previous.total().ore());
+        assertEquals(new BigDecimal("3"), previous.lines().get(0).quantity());
+    }
+
+    @Test
+    void checkoutRejectsPaymentTransitionsFromWrongStates() {
+        Checkout checkout = new Checkout();
+
+        assertThrows(IllegalStateException.class, () -> {
+            checkout.beginPayment();
+        });
+        assertThrows(IllegalStateException.class, () -> {
+            checkout.returnToShopping();
+        });
+        assertEquals(CheckoutState.EMPTY, checkout.state());
+        assertTrue(checkout.lines().isEmpty());
+
+        checkout.add(bread(), BigDecimal.ONE);
+
+        assertThrows(IllegalStateException.class, () -> {
+            checkout.returnToShopping();
+        });
+        assertEquals(CheckoutState.SHOPPING, checkout.state());
+        assertEquals(BigDecimal.ONE, checkout.lines().get(0).quantity());
+
+        checkout.remove("A", BigDecimal.ONE);
+        assertEquals(CheckoutState.EMPTY, checkout.state());
+        assertTrue(checkout.lines().isEmpty());
+
+        assertThrows(IllegalStateException.class, () -> {
+            checkout.beginPayment();
+        });
+        assertEquals(CheckoutState.EMPTY, checkout.state());
+    }
+
+    @Test
+    void checkoutPaymentUsesConfiguredPercentageOffer() {
+        PercentDiscount discount = new PercentDiscount(Set.of("P", "D"), 20);
+        Checkout checkout = new Checkout(new PriceCalculator(), discount);
+        checkout.add(piggelin(), new BigDecimal("2"));
+        checkout.add(daim(), BigDecimal.ONE);
+        checkout.add(magnum(), BigDecimal.ONE);
+
+        PriceResult result = checkout.beginPayment();
+
+        assertEquals(CheckoutState.PAYMENT, checkout.state());
+        assertEquals(4800L, result.total().ore());
+        assertEquals(2000L, result.lines().get(2).finalPrice().ore());
+        assertEquals(3, checkout.lines().size());
+    }
+
     // Inventory
     @Test
     void inventoryRestockAddsToExistingStock() {
