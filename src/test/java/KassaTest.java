@@ -1,6 +1,7 @@
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -1257,5 +1258,92 @@ class KassaTest {
         assertEquals(1, cart.lines().size());
         assertEquals("A", cart.lines().get(0).product().id());
         assertEquals(BigDecimal.ONE, cart.lines().get(0).quantity());
+    }
+
+    // Percentage discounts
+    // EQ-P2, EQ-V1 och EQ-V2
+    @Test
+    void percentageDiscountAppliesToEligibleProductsInMixedCart() {
+        Cart cart = new Cart();
+        cart.add(piggelin(), new BigDecimal("2"));
+        cart.add(daim(), BigDecimal.ONE);
+        cart.add(magnum(), BigDecimal.ONE);
+        PercentDiscount discount = new PercentDiscount(Set.of("P", "D"), 20);
+
+        PriceResult result = new PriceCalculator().calculate(cart.lines(), discount);
+
+        assertEquals(4800L, result.total().ore());
+        assertEquals(400L, result.lines().get(0).discount().ore());
+        assertEquals(1600L, result.lines().get(0).finalPrice().ore());
+        assertEquals(300L, result.lines().get(1).discount().ore());
+        assertEquals(1200L, result.lines().get(1).finalPrice().ore());
+        assertEquals(0L, result.lines().get(2).discount().ore());
+        assertEquals(2000L, result.lines().get(2).finalPrice().ore());
+    }
+
+    private Product piggelin() {
+        return new Product("P", "Piggelin", Unit.PIECE, new Money(1000));
+    }
+
+    private Product daim() {
+        return new Product("D", "Daim", Unit.PIECE, new Money(1500));
+    }
+
+    private Product magnum() {
+        return new Product("M", "Magnum", Unit.PIECE, new Money(2000));
+    }
+
+    // EQ-P1 och EQ-P3
+    @Test
+    void percentDiscountRejectsPercentOutsideAllowedRange() {
+        int[] invalidPercentages = {-1, 101};
+
+        for (int percent : invalidPercentages) {
+            assertThrows(IllegalArgumentException.class, () -> {
+                new PercentDiscount(Set.of("P", "D"), percent);
+            });
+        }
+    }
+
+    // Gränsvärden inom EQ-P2, med både EQ-V1 och EQ-V2 i korgen
+    @Test
+    void percentageDiscountHandlesBoundariesInMixedCart() {
+        Cart cart = new Cart();
+        cart.add(piggelin(), new BigDecimal("2"));
+        cart.add(daim(), BigDecimal.ONE);
+        cart.add(magnum(), BigDecimal.ONE);
+        int[] percentages = {0, 1, 99, 100};
+        long[] expectedTotals = {5500, 5465, 2035, 2000};
+        PriceCalculator calculator = new PriceCalculator();
+
+        for (int i = 0; i < percentages.length; i++) {
+            PercentDiscount discount = new PercentDiscount(Set.of("P", "D"), percentages[i]);
+
+            PriceResult result = calculator.calculate(cart.lines(), discount);
+
+            assertEquals(expectedTotals[i], result.total().ore(),
+                    "Procent: " + percentages[i]);
+            assertEquals(2000L, result.lines().get(2).finalPrice().ore());
+        }
+    }
+
+    // EQ-V1 och EQ-V2: namnändring ska inte styra erbjudandet
+    @Test
+    void percentageDiscountUsesProductIdsWhenNamesChange() {
+        Product renamedProduct = new Product("P", "Piggelin nytt namn",
+                Unit.PIECE, new Money(1000));
+        Product otherProduct = new Product("X", "Piggelin",
+                Unit.PIECE, new Money(1000));
+        Cart cart = new Cart();
+        cart.add(renamedProduct, BigDecimal.ONE);
+        cart.add(otherProduct, BigDecimal.ONE);
+        PercentDiscount discount = new PercentDiscount(Set.of("P"), 20);
+
+        PriceResult result = new PriceCalculator().calculate(cart.lines(), discount);
+
+        assertEquals(1800L, result.total().ore());
+        assertEquals(800L, result.lines().get(0).finalPrice().ore());
+        assertEquals(1000L, result.lines().get(1).finalPrice().ore());
+        assertEquals(0L, result.lines().get(1).discount().ore());
     }
 }
