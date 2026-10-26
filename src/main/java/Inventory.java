@@ -30,6 +30,18 @@ public final class Inventory {
         quantities.put(id, quantities.get(id).add(quantity));
     }
 
+    public void withdraw(String id, BigDecimal quantity) {
+        Product product = requireProduct(id);
+        product.validatePositiveQuantity(quantity);
+
+        BigDecimal currentStock = quantities.get(id);
+        if (quantity.compareTo(currentStock) > 0) {
+            throw new IllegalStateException("Lagret räcker inte");
+        }
+
+        quantities.put(id, currentStock.subtract(quantity));
+    }
+
     private Product requireProduct(String id) {
         Product product = products.get(id);
         if (product == null) {

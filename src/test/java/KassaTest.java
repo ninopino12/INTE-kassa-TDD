@@ -780,6 +780,154 @@ class KassaTest {
         assertEquals(new BigDecimal("5"), inventory.stock("A"));
     }
 
+    @Test
+    void inventoryWithdrawalReducesOnlyRequestedStock() {
+        Inventory inventory = new Inventory();
+        inventory.register(bread(), new BigDecimal("5"));
+        inventory.register(candy(), new BigDecimal("0.500"));
+
+        inventory.withdraw("A", new BigDecimal("2"));
+
+        assertEquals(new BigDecimal("3"), inventory.stock("A"));
+        assertEquals(new BigDecimal("0.500"), inventory.stock("B"));
+    }
+
+     @Test
+    void inventoryWithdrawalCanEmptyStock() {
+        Inventory inventory = new Inventory();
+        inventory.register(bread(), new BigDecimal("5"));
+        inventory.register(candy(), new BigDecimal("0.500"));
+
+        inventory.withdraw("A", new BigDecimal("5"));
+
+        assertEquals(0, inventory.stock("A").signum());
+        assertEquals(new BigDecimal("0.500"), inventory.stock("B"));
+    }
+
+    @Test
+    void inventoryRejectsWithdrawalLargerThanStock() {
+        Inventory inventory = new Inventory();
+        inventory.register(bread(), new BigDecimal("5"));
+        inventory.register(candy(), new BigDecimal("0.500"));
+
+        assertThrows(IllegalStateException.class, () -> {
+            inventory.withdraw("A", new BigDecimal("6"));
+        });
+
+        assertEquals(new BigDecimal("5"), inventory.stock("A"));
+        assertEquals(new BigDecimal("0.500"), inventory.stock("B"));
+    }
+
+    @Test
+    void inventoryRejectsWithdrawalFromEmptyStock() {
+        Inventory inventory = new Inventory();
+        inventory.register(bread(), BigDecimal.ZERO);
+        inventory.register(candy(), new BigDecimal("0.500"));
+
+        assertThrows(IllegalStateException.class, () -> {
+            inventory.withdraw("A", BigDecimal.ONE);
+        });
+
+        assertEquals(0, inventory.stock("A").signum());
+        assertEquals(new BigDecimal("0.500"), inventory.stock("B"));
+    }
+
+    @Test
+    void inventoryWithdrawsKilogramsExactly() {
+        Inventory inventory = new Inventory();
+        inventory.register(bread(), new BigDecimal("5"));
+        inventory.register(candy(), new BigDecimal("0.500"));
+
+        inventory.withdraw("B", new BigDecimal("0.125"));
+
+        assertEquals(new BigDecimal("0.375"), inventory.stock("B"));
+        assertEquals(new BigDecimal("5"), inventory.stock("A"));
+    }
+
+    @Test
+    void inventoryRejectsInvalidPieceWithdrawalsWithoutChanges() {
+        Inventory inventory = new Inventory();
+        inventory.register(bread(), new BigDecimal("5"));
+        inventory.register(candy(), new BigDecimal("0.500"));
+        BigDecimal[] invalidQuantities = {
+                null, BigDecimal.ZERO, new BigDecimal("-1"), new BigDecimal("1.5")
+        };
+
+        for (BigDecimal quantity : invalidQuantities) {
+            assertThrows(IllegalArgumentException.class, () -> {
+                inventory.withdraw("A", quantity);
+            });
+
+            assertEquals(new BigDecimal("5"), inventory.stock("A"));
+            assertEquals(new BigDecimal("0.500"), inventory.stock("B"));
+        }
+    }
+
+    @Test
+    void inventoryRejectsFractionOfGramWhenWithdrawing() {
+        Inventory inventory = new Inventory();
+        inventory.register(bread(), new BigDecimal("5"));
+        inventory.register(candy(), new BigDecimal("0.500"));
+
+        assertThrows(IllegalArgumentException.class, () -> {
+            inventory.withdraw("B", new BigDecimal("0.0005"));
+        });
+
+        assertEquals(new BigDecimal("5"), inventory.stock("A"));
+        assertEquals(new BigDecimal("0.500"), inventory.stock("B"));
+    }
+
+    @Test
+    void inventoryRejectsUnknownWithdrawalIdWithoutChanges() {
+        Inventory inventory = new Inventory();
+        inventory.register(bread(), new BigDecimal("5"));
+        inventory.register(candy(), new BigDecimal("0.500"));
+        String[] unknownIds = {null, "", "missing", "a"};
+
+        for (String id : unknownIds) {
+            assertThrows(IllegalArgumentException.class, () -> {
+                inventory.withdraw(id, BigDecimal.ONE);
+            });
+
+            assertEquals(new BigDecimal("5"), inventory.stock("A"));
+            assertEquals(new BigDecimal("0.500"), inventory.stock("B"));
+        }
+    }
+
+    @Test
+    void inventoryCanRestockAfterFullWithdrawal() {
+        Inventory inventory = new Inventory();
+        inventory.register(bread(), new BigDecimal("5"));
+
+        inventory.withdraw("A", new BigDecimal("5"));
+        assertEquals(0, inventory.stock("A").signum());
+
+        inventory.restock("A", new BigDecimal("2"));
+        assertEquals(new BigDecimal("2"), inventory.stock("A"));
+
+        inventory.withdraw("A", BigDecimal.ONE);
+        assertEquals(BigDecimal.ONE, inventory.stock("A"));
+    }
+
+    @Test
+    void inventoryChecksStockOnEveryWithdrawal() {
+        Inventory inventory = new Inventory();
+        inventory.register(bread(), new BigDecimal("5"));
+        inventory.register(candy(), new BigDecimal("0.500"));
+
+        inventory.withdraw("A", new BigDecimal("3"));
+        assertEquals(new BigDecimal("2"), inventory.stock("A"));
+
+        assertThrows(IllegalStateException.class, () -> {
+            inventory.withdraw("A", new BigDecimal("3"));
+        });
+        assertEquals(new BigDecimal("2"), inventory.stock("A"));
+        assertEquals(new BigDecimal("0.500"), inventory.stock("B"));
+
+        inventory.withdraw("A", new BigDecimal("2"));
+        assertEquals(0, inventory.stock("A").signum());
+    }
+
     // Prices
     @Test
     void priceCalculatorCalculatesPieceAndWeightPrices() {
