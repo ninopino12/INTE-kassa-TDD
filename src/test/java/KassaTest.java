@@ -1757,4 +1757,53 @@ class KassaTest {
                     "Antal rabattvaror: " + quantities[i]);
         }
     }
+
+    // Val av erbjudande
+    @Test
+    void bestOfferChoosesWholeCampaignAroundThePriceCrossover() {
+        Cart cart = new Cart();
+        cart.add(piggelin(), BigDecimal.ONE);
+        cart.add(daim(), new BigDecimal("2"));
+        cart.add(magnum(), BigDecimal.ONE);
+        ThreeForTwoDiscount threeForTwo = new ThreeForTwoDiscount(Set.of("P", "D"));
+        PriceCalculator calculator = new PriceCalculator();
+        int[] percentages = {24, 25, 26};
+        long[] expectedTotals = {5000, 5000, 4960};
+
+        for (int i = 0; i < percentages.length; i++) {
+            PercentDiscount percent = new PercentDiscount(Set.of("P", "D"), percentages[i]);
+
+            PriceResult result = calculator.calculate(cart.lines(), percent, threeForTwo);
+
+            assertEquals(expectedTotals[i], result.total().ore(),
+                    "Procent: " + percentages[i]);
+        }
+    }
+
+    @Test
+    void checkoutChangesWinningOfferAfterCartEditAndUsesItForPayment() {
+        Inventory inventory = new Inventory();
+        inventory.register(piggelin(), new BigDecimal("10"));
+        inventory.register(magnum(), new BigDecimal("2"));
+        PercentDiscount percent = new PercentDiscount(Set.of("P", "D"), 25);
+        ThreeForTwoDiscount threeForTwo = new ThreeForTwoDiscount(Set.of("P", "D"));
+        Checkout checkout = new Checkout(new PriceCalculator(), percent, threeForTwo);
+        checkout.add(piggelin(), new BigDecimal("3"));
+        checkout.add(magnum(), BigDecimal.ONE);
+
+        PriceResult first = checkout.beginPayment();
+        assertEquals(4000L, first.total().ore());
+
+        checkout.returnToShopping();
+        checkout.changeQuantity("P", new BigDecimal("9"));
+        PriceResult updated = checkout.beginPayment();
+        assertEquals(8750L, updated.total().ore());
+
+        Receipt receipt = checkout.pay(new Money(10000), inventory);
+
+        assertEquals(8750L, receipt.total().ore());
+        assertEquals(1250L, receipt.change().ore());
+        assertEquals(BigDecimal.ONE, inventory.stock("P"));
+        assertEquals(BigDecimal.ONE, inventory.stock("M"));
+    }
 }

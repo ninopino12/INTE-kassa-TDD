@@ -6,6 +6,7 @@ public final class Checkout {
     private final Cart cart = new Cart();
     private final PriceCalculator priceCalculator;
     private final PercentDiscount discount;
+    private final ThreeForTwoDiscount threeForTwoDiscount;
     private CheckoutState state = CheckoutState.EMPTY;
     private PriceResult priceResult;
 
@@ -14,11 +15,17 @@ public final class Checkout {
     }
 
     public Checkout(PriceCalculator priceCalculator, PercentDiscount discount) {
-        if (priceCalculator == null || discount == null) {
-            throw new IllegalArgumentException("Prisberäknare och rabattinställning måste finnas");
+        this(priceCalculator, discount, new ThreeForTwoDiscount(Set.of()));
+    }
+
+    public Checkout(PriceCalculator priceCalculator, PercentDiscount discount,
+                    ThreeForTwoDiscount threeForTwoDiscount) {
+        if (priceCalculator == null || discount == null || threeForTwoDiscount == null) {
+            throw new IllegalArgumentException("Prisberäknare och rabattinställningar måste finnas");
         }
         this.priceCalculator = priceCalculator;
         this.discount = discount;
+        this.threeForTwoDiscount = threeForTwoDiscount;
     }
 
     public CheckoutState state() {
@@ -48,7 +55,7 @@ public final class Checkout {
             throw new IllegalStateException("Betalning kan bara börja från varuregistrering");
         }
 
-        priceResult = priceCalculator.calculate(cart.lines(), discount);
+        priceResult = priceCalculator.calculate(cart.lines(), discount, threeForTwoDiscount);
         state = CheckoutState.PAYMENT;
         return priceResult;
     }

@@ -9,6 +9,17 @@ public final class PriceCalculator {
         return calculate(lines, new PercentDiscount(Set.of(), 0));
     }
 
+    public PriceResult calculate(List<CartLine> lines, PercentDiscount percentDiscount,
+                                 ThreeForTwoDiscount threeForTwoDiscount) {
+        PriceResult percentPrice = calculate(lines, percentDiscount);
+        PriceResult threeForTwoPrice = calculate(lines, threeForTwoDiscount);
+
+        if (percentPrice.total().compareTo(threeForTwoPrice.total()) <= 0) {
+            return percentPrice;
+        }
+        return threeForTwoPrice;
+    }
+
     public PriceResult calculate(List<CartLine> lines, ThreeForTwoDiscount discount) {
         if (discount == null) {
             throw new IllegalArgumentException("Rabattinställningen måste finnas");
