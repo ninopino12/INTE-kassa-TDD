@@ -1609,4 +1609,106 @@ class KassaTest {
         }
     }
 
+    // Betalning och kvitto
+    @Test
+    void checkoutRejectsUnderpaymentAndAllowsANewFullPayment() {
+        Inventory inventory = new Inventory();
+        inventory.register(bread(), new BigDecimal("5"));
+        Checkout checkout = new Checkout();
+        checkout.add(bread(), new BigDecimal("2"));
+        PriceResult frozen = checkout.beginPayment();
+
+        assertThrows(IllegalStateException.class, () -> {
+            checkout.pay(new Money(1900), inventory);
+        });
+
+        assertEquals(CheckoutState.PAYMENT, checkout.state());
+        assertEquals(1, checkout.lines().size());
+        assertEquals(new BigDecimal("2"), checkout.lines().get(0).quantity());
+        assertEquals(new BigDecimal("5"), inventory.stock("A"));
+        assertEquals(2000L, frozen.total().ore());
+
+        Receipt receipt = checkout.pay(new Money(2500), inventory);
+
+        assertEquals(CheckoutState.PRINTING_RECEIPT, checkout.state());
+        assertEquals(2000L, receipt.total().ore());
+        assertEquals(2500L, receipt.paid().ore());
+        assertEquals(500L, receipt.change().ore());
+        assertEquals(1, receipt.lines().size());
+        assertEquals("A", receipt.lines().get(0).product().id());
+        assertEquals(new BigDecimal("2"), receipt.lines().get(0).quantity());
+        assertEquals(new BigDecimal("3"), inventory.stock("A"));
+
+        checkout.completeReceiptPrinting();
+
+        assertEquals(CheckoutState.EMPTY, checkout.state());
+        assertTrue(checkout.lines().isEmpty());
+        assertEquals(2000L, receipt.total().ore());
+        assertEquals(new BigDecimal("2"), receipt.lines().get(0).quantity());
+    }
+
+        @Test
+    void checkoutPreservesPurchaseOnStockShortageAndCanRetryAfterRestock() {
+        Inventory inventory = new Inventory();
+        inventory.register(bread(), new BigDecimal("5"));
+        inventory.register(candy(), new BigDecimal("0.500"));
+        Checkout checkout = new Checkout();
+        checkout.add(bread(), BigDecimal.ONE);
+        checkout.add(candy(), new BigDecimal("0.501"));
+        checkout.beginPayment();
+
+        assertThrows(IllegalStateException.class, () -> {
+            checkout.pay(new Money(4000), inventory);
+        });
+
+        assertEquals(CheckoutState.PAYMENT, checkout.state());
+        assertEquals(2, checkout.lines().size());
+        assertEquals(new BigDecimal("5"), inventory.stock("A"));
+        assertEquals(new BigDecimal("0.500"), inventory.stock("B"));
+
+        inventory.restock("B", new BigDecimal("0.001"));
+        Receipt receipt = checkout.pay(new Money(4000), inventory);
+
+        assertEquals(CheckoutState.PRINTING_RECEIPT, checkout.state());
+        assertEquals(3004L, receipt.total().ore());
+    }
+
+    @Test
+    void checkoutCannotChargeOrEditPurchaseWhileReceiptIsPrinting() {
+        Inventory inventory = new Inventory();
+        inventory.register(bread(), new BigDecimal("5"));
+        Checkout checkout = new Checkout();
+        checkout.add(bread(), BigDecimal.ONE);
+        checkout.beginPayment();
+        checkout.pay(new Money(1000), inventory);
+
+        assertThrows(IllegalStateException.class, () -> {
+            checkout.pay(new Money(1000), inventory);
+        });
+        assertThrows(IllegalStateException.class, () -> {
+            checkout.add(bread(), BigDecimal.ONE);
+        });
+
+        assertEquals(CheckoutState.PRINTING_RECEIPT, checkout.state());
+        assertEquals(BigDecimal.ONE, checkout.lines().get(0).quantity());
+        assertEquals(new BigDecimal("4"), inventory.stock("A"));
+    }
+
+    @Test
+    void checkoutAcceptsZeroPaymentForARealPurchaseWithFullDiscount() {
+        Inventory inventory = new Inventory();
+        inventory.register(bread(), new BigDecimal("5"));
+        PercentDiscount discount = new PercentDiscount(Set.of("A"), 100);
+        Checkout checkout = new Checkout(new PriceCalculator(), discount);
+        checkout.add(bread(), BigDecimal.ONE);
+        checkout.beginPayment();
+
+        Receipt receipt = checkout.pay(new Money(0), inventory);
+
+        assertEquals(CheckoutState.PRINTING_RECEIPT, checkout.state());
+        assertEquals(0L, receipt.total().ore());
+        assertEquals(1, receipt.lines().size());
+        assertEquals(new BigDecimal("4"), inventory.stock("A"));
+    }
+
 }

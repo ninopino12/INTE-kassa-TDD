@@ -62,6 +62,33 @@ public final class Checkout {
         state = CheckoutState.SHOPPING;
     }
 
+    public Receipt pay(Money paid, Inventory inventory) {
+        if (state != CheckoutState.PAYMENT) {
+            throw new IllegalStateException("Betalning pågår inte");
+        }
+        if (paid == null || inventory == null) {
+            throw new IllegalArgumentException("Betalning och lager måste finnas");
+        }
+        if (paid.compareTo(priceResult.total()) < 0) {
+            throw new IllegalStateException("Betalningen räcker inte");
+        }
+
+        Receipt receipt = new Receipt(priceResult, paid);
+        inventory.withdrawAll(cart.lines());
+        state = CheckoutState.PRINTING_RECEIPT;
+        return receipt;
+    }
+
+    public void completeReceiptPrinting() {
+        if (state != CheckoutState.PRINTING_RECEIPT) {
+            throw new IllegalStateException("Kvittoutskrift pågår inte");
+        }
+
+        cart.clear();
+        priceResult = null;
+        state = CheckoutState.EMPTY;
+    }
+
     public List<CartLine> lines() {
         return cart.lines();
     }
