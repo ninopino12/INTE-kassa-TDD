@@ -1,5 +1,4 @@
 import java.math.BigDecimal;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,7 +45,7 @@ public final class Cart {
     }
 
     public List<CartLine> lines() {
-        return new ArrayList<>(lines.values());
+        return List.copyOf(lines.values());
     }
 
     private CartLine requireLine(String id) {

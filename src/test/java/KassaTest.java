@@ -1457,4 +1457,52 @@ class KassaTest {
         assertEquals(1000L, result.lines().get(1).finalPrice().ore());
         assertEquals(0L, result.lines().get(1).discount().ore());
     }
+    // Cart snapshots
+    @Test
+    void checkoutExposesReadOnlySnapshotDuringPayment() {
+        Checkout checkout = new Checkout();
+        checkout.add(bread(), new BigDecimal("2"));
+        PriceResult frozen = checkout.beginPayment();
+        List<CartLine> exposed = checkout.lines();
+
+        assertThrows(UnsupportedOperationException.class, () -> {
+            exposed.clear();
+        });
+        assertThrows(UnsupportedOperationException.class, () -> {
+            exposed.add(new CartLine(bread(), BigDecimal.ONE));
+        });
+        assertThrows(UnsupportedOperationException.class, () -> {
+            exposed.set(0, new CartLine(bread(), new BigDecimal("5")));
+        });
+
+        assertEquals(CheckoutState.PAYMENT, checkout.state());
+        assertEquals(1, checkout.lines().size());
+        assertEquals(new BigDecimal("2"), checkout.lines().get(0).quantity());
+        assertEquals(2000L, frozen.total().ore());
+    }
+
+    @Test
+    void cartSnapshotsKeepTheirValuesAcrossEditsAndClear() {
+        Cart cart = new Cart();
+        cart.add(bread(), new BigDecimal("2"));
+        cart.add(candy(), new BigDecimal("0.125"));
+        List<CartLine> original = cart.lines();
+
+        cart.add(bread(), BigDecimal.ONE);
+        List<CartLine> afterAddition = cart.lines();
+
+        cart.changeQuantity("A", new BigDecimal("4"));
+        cart.remove("B", new BigDecimal("0.125"));
+        cart.clear();
+
+        assertTrue(cart.lines().isEmpty());
+
+        assertEquals(2, original.size());
+        assertEquals(new BigDecimal("2"), original.get(0).quantity());
+        assertEquals(new BigDecimal("0.125"), original.get(1).quantity());
+
+        assertEquals(2, afterAddition.size());
+        assertEquals(new BigDecimal("3"), afterAddition.get(0).quantity());
+        assertEquals(new BigDecimal("0.125"), afterAddition.get(1).quantity());
+    }
 }
