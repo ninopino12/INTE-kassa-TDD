@@ -1505,4 +1505,108 @@ class KassaTest {
         assertEquals(new BigDecimal("3"), afterAddition.get(0).quantity());
         assertEquals(new BigDecimal("0.125"), afterAddition.get(1).quantity());
     }
+
+    // Uttag av hela kundkorgen
+    @Test
+    void inventoryRejectsWholePurchaseWhenOneProductIsShort() {
+        CartLine breadLine = new CartLine(bread(), BigDecimal.ONE);
+        CartLine candyLine = new CartLine(candy(), new BigDecimal("0.501"));
+        List<List<CartLine>> orders = List.of(
+                List.of(breadLine, candyLine),
+                List.of(candyLine, breadLine));
+
+        for (List<CartLine> lines : orders) {
+            Inventory inventory = new Inventory();
+            inventory.register(bread(), new BigDecimal("5"));
+            inventory.register(candy(), new BigDecimal("0.500"));
+
+            assertThrows(IllegalStateException.class, () -> {
+                inventory.withdrawAll(lines);
+            });
+
+            assertEquals(new BigDecimal("5"), inventory.stock("A"));
+            assertEquals(new BigDecimal("0.500"), inventory.stock("B"));
+        }
+    }
+
+    @Test
+    void inventoryWithdrawsWholeCartWithoutChangingCartOrOtherStock() {
+        Inventory inventory = new Inventory();
+        inventory.register(bread(), new BigDecimal("5"));
+        inventory.register(candy(), new BigDecimal("0.500"));
+        inventory.register(magnum(), new BigDecimal("7"));
+        Cart cart = new Cart();
+        cart.add(bread(), new BigDecimal("3"));
+        cart.add(candy(), new BigDecimal("0.125"));
+
+        inventory.withdrawAll(cart.lines());
+
+        assertEquals(new BigDecimal("2"), inventory.stock("A"));
+        assertEquals(new BigDecimal("0.375"), inventory.stock("B"));
+        assertEquals(new BigDecimal("7"), inventory.stock("M"));
+        assertEquals(2, cart.lines().size());
+        assertEquals(new BigDecimal("3"), cart.lines().get(0).quantity());
+        assertEquals(new BigDecimal("0.125"), cart.lines().get(1).quantity());
+
+        inventory.withdrawAll(List.of());
+
+        assertEquals(new BigDecimal("2"), inventory.stock("A"));
+        assertEquals(new BigDecimal("0.375"), inventory.stock("B"));
+        assertEquals(new BigDecimal("7"), inventory.stock("M"));
+    }
+
+    @Test
+    void inventoryCountsRepeatedProductIdsAcrossTheWholeRequest() {
+        Inventory inventory = new Inventory();
+        inventory.register(bread(), new BigDecimal("5"));
+        inventory.register(candy(), new BigDecimal("0.500"));
+        List<CartLine> tooMuch = List.of(
+                new CartLine(bread(), new BigDecimal("2")),
+                new CartLine(candy(), new BigDecimal("0.125")),
+                new CartLine(bread(), new BigDecimal("4")));
+
+        assertThrows(IllegalStateException.class, () -> {
+            inventory.withdrawAll(tooMuch);
+        });
+        assertEquals(new BigDecimal("5"), inventory.stock("A"));
+        assertEquals(new BigDecimal("0.500"), inventory.stock("B"));
+
+        List<CartLine> exactStock = List.of(
+                new CartLine(bread(), new BigDecimal("2")),
+                new CartLine(candy(), new BigDecimal("0.125")),
+                new CartLine(bread(), new BigDecimal("3")));
+
+        inventory.withdrawAll(exactStock);
+
+        assertEquals(BigDecimal.ZERO, inventory.stock("A"));
+        assertEquals(new BigDecimal("0.375"), inventory.stock("B"));
+    }
+
+    @Test
+    void inventoryRejectsInvalidRequestsWithoutPartialWithdrawal() {
+        List<CartLine> unknownProduct = List.of(
+                new CartLine(bread(), BigDecimal.ONE),
+                new CartLine(magnum(), BigDecimal.ONE));
+        List<CartLine> missingLine = new ArrayList<>();
+        missingLine.add(new CartLine(bread(), BigDecimal.ONE));
+        missingLine.add(null);
+        List<List<CartLine>> invalidRequests = new ArrayList<>();
+        invalidRequests.add(unknownProduct);
+        invalidRequests.add(missingLine);
+        invalidRequests.add(null);
+
+        for (List<CartLine> lines : invalidRequests) {
+            Inventory inventory = new Inventory();
+            inventory.register(bread(), new BigDecimal("5"));
+            inventory.register(candy(), new BigDecimal("0.500"));
+
+            assertThrows(IllegalArgumentException.class, () -> {
+                inventory.withdrawAll(lines);
+            });
+
+            assertEquals(new BigDecimal("5"), inventory.stock("A"));
+            assertEquals(new BigDecimal("0.500"), inventory.stock("B"));
+        }
+    }
+
 }

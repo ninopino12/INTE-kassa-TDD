@@ -1,5 +1,6 @@
 import java.math.BigDecimal;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public final class Inventory {
@@ -40,6 +41,29 @@ public final class Inventory {
         }
 
         quantities.put(id, currentStock.subtract(quantity));
+    }
+
+    public void withdrawAll(List<CartLine> lines) {
+        if (lines == null) {
+            throw new IllegalArgumentException("Korgrader måste finnas");
+        }
+
+        Map<String, BigDecimal> remainingStock = new HashMap<>(quantities);
+        for (CartLine line : lines) {
+            if (line == null) {
+                throw new IllegalArgumentException("Korgrad måste finnas");
+            }
+            Product product = requireProduct(line.product().id());
+            product.validatePositiveQuantity(line.quantity());
+
+            BigDecimal currentStock = remainingStock.get(product.id());
+            if (line.quantity().compareTo(currentStock) > 0) {
+                throw new IllegalStateException("Lagret räcker inte");
+            }
+            remainingStock.put(product.id(), currentStock.subtract(line.quantity()));
+        }
+
+        quantities.putAll(remainingStock);
     }
 
     private Product requireProduct(String id) {
