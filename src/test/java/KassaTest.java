@@ -1,6 +1,7 @@
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
@@ -1711,4 +1712,49 @@ class KassaTest {
         assertEquals(new BigDecimal("4"), inventory.stock("A"));
     }
 
+
+    // 3 för 2
+    @Test
+    void threeForTwoGroupsMixedProductsByPriceRegardlessOfRowOrder() {
+        Cart cart = new Cart();
+        cart.add(piggelin(), new BigDecimal("2"));
+        cart.add(daim(), new BigDecimal("4"));
+        cart.add(magnum(), BigDecimal.ONE);
+        cart.add(candy(), new BigDecimal("0.125"));
+        ThreeForTwoDiscount discount = new ThreeForTwoDiscount(Set.of("P", "D", "B"));
+        Map<String, Long> expectedSavings = Map.of(
+                "P", 1000L, "D", 1500L, "M", 0L, "B", 0L);
+        PriceCalculator calculator = new PriceCalculator();
+
+        for (List<CartLine> lines : List.of(cart.lines(), cart.lines().reversed())) {
+            PriceResult result = calculator.calculate(lines, discount);
+
+            assertEquals(8000L, result.total().ore());
+            assertEquals(4, result.lines().size());
+            for (PricedLine line : result.lines()) {
+                assertEquals(expectedSavings.get(line.product().id()),
+                        Long.valueOf(line.discount().ore()), line.product().id());
+            }
+        }
+    }
+
+    @Test
+    void threeForTwoHonorsGroupBoundariesAndPurchaseLimit() {
+        int[] quantities = {0, 2, 3, 5, 6, 8, 9};
+        long[] expectedTotals = {0, 2000, 2000, 4000, 4000, 6000, 7000};
+        ThreeForTwoDiscount discount = new ThreeForTwoDiscount(Set.of("P", "D"));
+        PriceCalculator calculator = new PriceCalculator();
+
+        for (int i = 0; i < quantities.length; i++) {
+            Cart cart = new Cart();
+            if (quantities[i] > 0) {
+                cart.add(piggelin(), BigDecimal.valueOf(quantities[i]));
+            }
+
+            PriceResult result = calculator.calculate(cart.lines(), discount);
+
+            assertEquals(expectedTotals[i], result.total().ore(),
+                    "Antal rabattvaror: " + quantities[i]);
+        }
+    }
 }

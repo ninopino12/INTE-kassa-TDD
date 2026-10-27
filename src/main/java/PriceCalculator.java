@@ -9,6 +9,23 @@ public final class PriceCalculator {
         return calculate(lines, new PercentDiscount(Set.of(), 0));
     }
 
+    public PriceResult calculate(List<CartLine> lines, ThreeForTwoDiscount discount) {
+        if (discount == null) {
+            throw new IllegalArgumentException("Rabattinställningen måste finnas");
+        }
+
+        PriceResult original = calculate(lines);
+        List<Money> savings = discount.savingsFor(original);
+        List<PricedLine> pricedLines = new ArrayList<>();
+        for (int i = 0; i < original.lines().size(); i++) {
+            PricedLine line = original.lines().get(i);
+            pricedLines.add(new PricedLine(line.product(), line.quantity(),
+                    line.originalPrice(), savings.get(i)));
+        }
+
+        return new PriceResult(pricedLines);
+    }
+
     public PriceResult calculate(List<CartLine> lines, PercentDiscount discount) {
         if (lines == null) {
             throw new IllegalArgumentException("Korgrader måste finnas");
