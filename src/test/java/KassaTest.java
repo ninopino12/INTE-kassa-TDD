@@ -1877,6 +1877,82 @@ class KassaTest {
         assertEquals(90L, result.total().ore());
     }
 
+    // IO och köpflöde
+    @Test
+    void ioDrivesPurchaseAndPrintsReceiptBeforeResettingCheckout() {
+        Inventory inventory = new Inventory();
+        inventory.register(piggelin(), new BigDecimal("5"));
+        inventory.register(candy(), new BigDecimal("0.500"));
+        Checkout checkout = new Checkout(new PriceCalculator(),
+                new PercentDiscount(Set.of("P", "D"), 25),
+                new ThreeForTwoDiscount(Set.of("P", "D")));
+        TKSIO io = new TKSIO(checkout,
+                "vara P 1", "vara B 0,125", "kassa", "tillbaka",
+                "andra P 4", "ta-bort P 1", "kassa", "betala 30,00", "sluta");
+        KassaApp app = new KassaApp(io, checkout, inventory,
+                Map.of("P", piggelin(), "B", candy()));
+
+        app.run();
+
+        assertEquals(List.of(
+                CheckoutState.EMPTY, CheckoutState.SHOPPING, CheckoutState.SHOPPING,
+                CheckoutState.PAYMENT, CheckoutState.SHOPPING, CheckoutState.SHOPPING,
+                CheckoutState.SHOPPING, CheckoutState.PAYMENT, CheckoutState.EMPTY),
+                io.statesAtRead);
+        assertTrue(io.statesAtPrint.contains(CheckoutState.PRINTING_RECEIPT));
+        String receipt = io.out.get(io.out.size() - 1);
+        assertTrue(receipt.startsWith("KVITTO\n"));
+        assertTrue(receipt.contains("Piggelin"));
+        assertTrue(receipt.contains("Godis"));
+        assertTrue(receipt.contains("Totalt: 25,00 kr\nBetalt: 30,00 kr\nVäxel: 5,00 kr"));
+    }
+
+    @Test
+    void ioLetsCustomerRetryInvalidInputAndUnderpayment() {
+        Inventory inventory = new Inventory();
+        inventory.register(piggelin(), new BigDecimal("5"));
+        Checkout checkout = new Checkout();
+        TKSIO io = new TKSIO(checkout,
+                "vara P fel", "vara P 1", "kassa", "betala 1,00", "betala 10,00");
+        KassaApp app = new KassaApp(io, checkout, inventory, Map.of("P", piggelin()));
+
+        app.run();
+
+        assertEquals(List.of(
+                CheckoutState.EMPTY, CheckoutState.EMPTY, CheckoutState.SHOPPING,
+                CheckoutState.PAYMENT, CheckoutState.PAYMENT, CheckoutState.EMPTY),
+                io.statesAtRead);
+        assertTrue(io.out.contains("Fel: Ange ett giltigt tal. Betalning får ha högst två decimaler."));
+        assertTrue(io.out.contains("Fel: Betalningen räcker inte"));
+        assertEquals(new BigDecimal("4"), inventory.stock("P"));
+    }
+
+    private static final class TKSIO implements KSIO {
+        private final Checkout checkout;
+        private final List<String> in;
+        private final List<String> out = new ArrayList<>();
+        private final List<CheckoutState> statesAtRead = new ArrayList<>();
+        private final List<CheckoutState> statesAtPrint = new ArrayList<>();
+        private int index;
+
+        private TKSIO(Checkout checkout, String... in) {
+            this.checkout = checkout;
+            this.in = List.of(in);
+        }
+
+        @Override
+        public String read() {
+            statesAtRead.add(checkout.state());
+            return index < in.size() ? in.get(index++) : null;
+        }
+
+        @Override
+        public void print(String str) {
+            statesAtPrint.add(checkout.state());
+            out.add(str);
+        }
+    }
+
     //Matchers
     @Test
     void inventoryHandlesLastGramWithoutDependingOnDecimalScale() {
