@@ -1900,4 +1900,23 @@ class KassaTest {
         inventory.withdraw("B", new BigDecimal("0.0010"));
         assertThat(inventory.stock("B"), comparesEqualTo(BigDecimal.ZERO));
     }
+
+    @Test
+    void priceCalculatorRoundsAfterDiscountAndSumsRoundedRows() {
+        Product first = new Product("R1", "Godis", Unit.KILOGRAM, new Money(101));
+        Product second = new Product("R2", "Nötter", Unit.KILOGRAM, new Money(101));
+        List<CartLine> lines = List.of(
+                new CartLine(first, new BigDecimal("0.500")),
+                new CartLine(second, new BigDecimal("0.500")));
+        PercentDiscount discount = new PercentDiscount(Set.of("R1", "R2"), 10);
+
+        PriceResult result = new PriceCalculator().calculate(lines, discount);
+
+        for (PricedLine line : result.lines()) {
+            assertEquals(51L, line.originalPrice().ore());
+            assertEquals(45L, line.finalPrice().ore());
+            assertEquals(6L, line.discount().ore());
+        }
+        assertEquals(90L, result.total().ore());
+    }
 }
