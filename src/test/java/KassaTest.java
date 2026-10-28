@@ -1848,6 +1848,41 @@ class KassaTest {
         assertEquals("Vaniljglass med k...", text.get(3).substring(0, 20));
     }
 
+    //Hantera flera kunder utan att förlora tidigare kvitto
+    @Test
+    void checkoutHandlesNextCustomerWithoutChangingPreviousReceipt() {
+        Inventory inventory = new Inventory();
+        inventory.register(bread(), new BigDecimal("5"));
+        inventory.register(daim(), new BigDecimal("2"));
+        Checkout checkout = new Checkout();
+
+        checkout.add(bread(), new BigDecimal("2"));
+        checkout.beginPayment();
+        Receipt first = checkout.pay(new Money(2500), inventory);
+        String firstText = first.format();
+        checkout.completeReceiptPrinting();
+
+        assertEquals(CheckoutState.EMPTY, checkout.state());
+        assertTrue(checkout.lines().isEmpty());
+
+        checkout.add(daim(), BigDecimal.ONE);
+        assertEquals(CheckoutState.SHOPPING, checkout.state());
+        checkout.beginPayment();
+        assertEquals(CheckoutState.PAYMENT, checkout.state());
+        Receipt second = checkout.pay(new Money(2000), inventory);
+        assertEquals(CheckoutState.PRINTING_RECEIPT, checkout.state());
+
+        assertEquals(1500L, second.total().ore());
+        assertEquals(1, second.lines().size());
+        assertEquals("D", second.lines().get(0).product().id());
+
+        checkout.completeReceiptPrinting();
+
+        assertEquals(CheckoutState.EMPTY, checkout.state());
+        assertTrue(checkout.lines().isEmpty());
+        assertEquals(firstText, first.format());
+    }
+
     //Matchers
     @Test
     void inventoryHandlesLastGramWithoutDependingOnDecimalScale() {
