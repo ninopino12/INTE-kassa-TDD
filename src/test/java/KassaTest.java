@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -1782,33 +1783,6 @@ class KassaTest {
         }
     }
 
-    @Test
-    void checkoutChangesWinningOfferAfterCartEditAndUsesItForPayment() {
-        Inventory inventory = new Inventory();
-        inventory.register(piggelin(), new BigDecimal("10"));
-        inventory.register(magnum(), new BigDecimal("2"));
-        PercentDiscount percent = new PercentDiscount(Set.of("P", "D"), 25);
-        ThreeForTwoDiscount threeForTwo = new ThreeForTwoDiscount(Set.of("P", "D"));
-        Checkout checkout = new Checkout(new PriceCalculator(), percent, threeForTwo);
-        checkout.add(piggelin(), new BigDecimal("3"));
-        checkout.add(magnum(), BigDecimal.ONE);
-
-        PriceResult first = checkout.beginPayment();
-        assertEquals(4000L, first.total().ore());
-
-        checkout.returnToShopping();
-        checkout.changeQuantity("P", new BigDecimal("9"));
-        PriceResult updated = checkout.beginPayment();
-        assertEquals(8750L, updated.total().ore());
-
-        Receipt receipt = checkout.pay(new Money(10000), inventory);
-
-        assertEquals(8750L, receipt.total().ore());
-        assertEquals(1250L, receipt.change().ore());
-        assertEquals(BigDecimal.ONE, inventory.stock("P"));
-        assertEquals(BigDecimal.ONE, inventory.stock("M"));
-    }
-
     //Kvitto formatering
     @Test
     void receiptFormatsStoredRowsAndPaymentInAlignedColumns() {
@@ -1883,6 +1857,26 @@ class KassaTest {
         assertEquals(firstText, first.format());
     }
 
+    // Avrundning
+    @Test
+    void priceCalculatorRoundsAfterDiscountAndSumsRoundedRows() {
+        Product first = new Product("R1", "Godis", Unit.KILOGRAM, new Money(101));
+        Product second = new Product("R2", "Nötter", Unit.KILOGRAM, new Money(101));
+        List<CartLine> lines = List.of(
+                new CartLine(first, new BigDecimal("0.500")),
+                new CartLine(second, new BigDecimal("0.500")));
+        PercentDiscount discount = new PercentDiscount(Set.of("R1", "R2"), 10);
+
+        PriceResult result = new PriceCalculator().calculate(lines, discount);
+
+        for (PricedLine line : result.lines()) {
+            assertEquals(51L, line.originalPrice().ore());
+            assertEquals(45L, line.finalPrice().ore());
+            assertEquals(6L, line.discount().ore());
+        }
+        assertEquals(90L, result.total().ore());
+    }
+
     //Matchers
     @Test
     void inventoryHandlesLastGramWithoutDependingOnDecimalScale() {
@@ -1902,21 +1896,44 @@ class KassaTest {
     }
 
     @Test
-    void priceCalculatorRoundsAfterDiscountAndSumsRoundedRows() {
-        Product first = new Product("R1", "Godis", Unit.KILOGRAM, new Money(101));
-        Product second = new Product("R2", "Nötter", Unit.KILOGRAM, new Money(101));
-        List<CartLine> lines = List.of(
-                new CartLine(first, new BigDecimal("0.500")),
-                new CartLine(second, new BigDecimal("0.500")));
-        PercentDiscount discount = new PercentDiscount(Set.of("R1", "R2"), 10);
+    void checkoutChangesWinningOfferAfterCartEditAndUsesItForPayment() {
+        Inventory inventory = new Inventory();
+        inventory.register(piggelin(), new BigDecimal("10"));
+        inventory.register(magnum(), new BigDecimal("2"));
+        PercentDiscount percent = new PercentDiscount(Set.of("P", "D"), 25);
+        ThreeForTwoDiscount threeForTwo = new ThreeForTwoDiscount(Set.of("P", "D"));
+        Checkout checkout = new Checkout(new PriceCalculator(), percent, threeForTwo);
+        checkout.add(piggelin(), new BigDecimal("3"));
+        checkout.add(magnum(), BigDecimal.ONE);
 
-        PriceResult result = new PriceCalculator().calculate(lines, discount);
+        PriceResult first = checkout.beginPayment();
+        assertEquals(4000L, first.total().ore());
 
-        for (PricedLine line : result.lines()) {
-            assertEquals(51L, line.originalPrice().ore());
-            assertEquals(45L, line.finalPrice().ore());
-            assertEquals(6L, line.discount().ore());
+        checkout.returnToShopping();
+        checkout.changeQuantity("P", new BigDecimal("9"));
+        PriceResult updated = checkout.beginPayment();
+        assertEquals(8750L, updated.total().ore());
+
+        Receipt receipt = checkout.pay(new Money(10000), inventory);
+
+        List<String> ids = new ArrayList<>();
+        for (PricedLine line : receipt.lines()) {
+            String id = line.product().id();
+            ids.add(id);
+            if (id.equals("P")) {
+                assertEquals(new BigDecimal("9"), line.quantity());
+                assertEquals(6750L, line.finalPrice().ore());
+            } else if (id.equals("M")) {
+                assertEquals(BigDecimal.ONE, line.quantity());
+                assertEquals(2000L, line.finalPrice().ore());
+            }
+
         }
-        assertEquals(90L, result.total().ore());
+        assertThat(ids, containsInAnyOrder("M", "P"));
+
+        assertEquals(8750L, receipt.total().ore());
+        assertEquals(1250L, receipt.change().ore());
+        assertEquals(BigDecimal.ONE, inventory.stock("P"));
+        assertEquals(BigDecimal.ONE, inventory.stock("M"));
     }
 }
