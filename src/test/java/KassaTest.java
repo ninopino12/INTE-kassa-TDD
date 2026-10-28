@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.comparesEqualTo;
 
 class KassaTest {
     // Money
@@ -1805,5 +1807,23 @@ class KassaTest {
         assertEquals(1250L, receipt.change().ore());
         assertEquals(BigDecimal.ONE, inventory.stock("P"));
         assertEquals(BigDecimal.ONE, inventory.stock("M"));
+    }
+
+    //Matchers
+    @Test
+    void inventoryHandlesLastGramWithoutDependingOnDecimalScale() {
+        Inventory inventory = new Inventory();
+        inventory.register(candy(), new BigDecimal("0.5000"));
+
+        inventory.withdraw("B", new BigDecimal("0.499"));
+        assertThat(inventory.stock("B"), comparesEqualTo(new BigDecimal("0.001")));
+
+        assertThrows(IllegalStateException.class, () -> {
+            inventory.withdraw("B", new BigDecimal("0.002"));
+        });
+        assertThat(inventory.stock("B"), comparesEqualTo(new BigDecimal("0.001")));
+
+        inventory.withdraw("B", new BigDecimal("0.0010"));
+        assertThat(inventory.stock("B"), comparesEqualTo(BigDecimal.ZERO));
     }
 }
