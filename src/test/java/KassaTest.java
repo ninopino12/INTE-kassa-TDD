@@ -1809,6 +1809,45 @@ class KassaTest {
         assertEquals(BigDecimal.ONE, inventory.stock("M"));
     }
 
+    //Kvitto formatering
+    @Test
+    void receiptFormatsStoredRowsAndPaymentInAlignedColumns() {
+        PriceResult prices = new PriceResult(List.of(
+                new PricedLine(bread(), new BigDecimal("3.0"),
+                        new Money(3000), new Money(1000)),
+                new PricedLine(candy(), new BigDecimal("0.1260"),
+                        new Money(504), new Money(0))));
+        Receipt receipt = new Receipt(prices, new Money(3000));
+
+        List<String> expected = List.of(
+                "KVITTO",
+                "Vara                      Mängd    Ord. kr  Rabatt kr    Pris kr",
+                "Bröd                       3 st      30,00      10,00      20,00",
+                "Godis                  0,126 kg       5,04       0,00       5,04",
+                "Totalt: 25,04 kr",
+                "Betalt: 30,00 kr",
+                "Växel: 4,96 kr");
+
+        assertEquals(expected, receipt.format().lines().toList());
+    }
+
+    @Test
+    void receiptKeepsTwentyCharacterNamesAndShortensLongerNames() {
+        Product exact = new Product("C", "Vaniljglass med kola",
+                Unit.PIECE, new Money(1000));
+        Product longer = new Product("D", "Vaniljglass med kola!",
+                Unit.PIECE, new Money(1000));
+        PriceResult prices = new PriceResult(List.of(
+                new PricedLine(exact, BigDecimal.ONE, new Money(1000), new Money(0)),
+                new PricedLine(longer, BigDecimal.ONE, new Money(1000), new Money(0))));
+        Receipt receipt = new Receipt(prices, new Money(2000));
+
+        List<String> text = receipt.format().lines().toList();
+
+        assertEquals("Vaniljglass med kola", text.get(2).substring(0, 20));
+        assertEquals("Vaniljglass med k...", text.get(3).substring(0, 20));
+    }
+
     //Matchers
     @Test
     void inventoryHandlesLastGramWithoutDependingOnDecimalScale() {
