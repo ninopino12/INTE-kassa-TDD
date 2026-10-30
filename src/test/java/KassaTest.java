@@ -253,31 +253,47 @@ class KassaTest {
     @Test
     void checkoutRejectsPaymentTransitionsFromWrongStates() {
         Checkout checkout = new Checkout();
+        Inventory inventory = new Inventory();
+        inventory.register(bread(), new BigDecimal("5"));
+        Money paid = new Money(1000);
 
-        assertThrows(IllegalStateException.class, () -> {
-            checkout.beginPayment();
-        });
-        assertThrows(IllegalStateException.class, () -> {
-            checkout.returnToShopping();
-        });
+        // EMPTY: det finns inget köp att betala eller skriva kvitto för.
+        assertThrows(IllegalStateException.class, () -> checkout.beginPayment());
+        assertThrows(IllegalStateException.class, () -> checkout.returnToShopping());
+        assertThrows(IllegalStateException.class, () -> checkout.pay(paid, inventory));
+        assertThrows(IllegalStateException.class, () -> checkout.completeReceiptPrinting());
+
         assertEquals(CheckoutState.EMPTY, checkout.state());
         assertTrue(checkout.lines().isEmpty());
+        assertEquals(0, new BigDecimal("5").compareTo(inventory.stock("A")));
 
         checkout.add(bread(), BigDecimal.ONE);
+        List<CartLine> originalLines = checkout.lines();
 
-        assertThrows(IllegalStateException.class, () -> {
-            checkout.returnToShopping();
-        });
+        // SHOPPING: betalningen har inte startats än.
+        assertThrows(IllegalStateException.class, () -> checkout.returnToShopping());
+        assertThrows(IllegalStateException.class, () -> checkout.pay(paid, inventory));
+        assertThrows(IllegalStateException.class, () -> checkout.completeReceiptPrinting());
+
         assertEquals(CheckoutState.SHOPPING, checkout.state());
-        assertEquals(BigDecimal.ONE, checkout.lines().get(0).quantity());
+        assertEquals(originalLines, checkout.lines());
+        assertEquals(0, new BigDecimal("5").compareTo(inventory.stock("A")));
 
+        checkout.beginPayment();
+
+        // PAYMENT: kvittoutskriften får inte avslutas före ett lyckat köp.
+        assertThrows(IllegalStateException.class, () -> checkout.completeReceiptPrinting());
+
+        assertEquals(CheckoutState.PAYMENT, checkout.state());
+        assertEquals(originalLines, checkout.lines());
+        assertEquals(0, new BigDecimal("5").compareTo(inventory.stock("A")));
+
+        checkout.returnToShopping();
         checkout.remove("A", BigDecimal.ONE);
         assertEquals(CheckoutState.EMPTY, checkout.state());
         assertTrue(checkout.lines().isEmpty());
 
-        assertThrows(IllegalStateException.class, () -> {
-            checkout.beginPayment();
-        });
+        assertThrows(IllegalStateException.class, () -> checkout.beginPayment());
         assertEquals(CheckoutState.EMPTY, checkout.state());
     }
 
