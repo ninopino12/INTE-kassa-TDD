@@ -1176,9 +1176,20 @@ class KassaTest {
                 CheckoutState.PAYMENT, CheckoutState.SHOPPING, CheckoutState.SHOPPING,
                 CheckoutState.SHOPPING, CheckoutState.PAYMENT, CheckoutState.EMPTY),
                 io.statesAtRead);
-        assertTrue(io.statesAtPrint.contains(CheckoutState.PRINTING_RECEIPT));
-        String receipt = io.out.get(io.out.size() - 1);
-        assertTrue(receipt.startsWith("KVITTO\n"));
+
+        int receiptCount = 0;
+        int receiptIndex = -1;
+        for (int i = 0; i < io.out.size(); i++) {
+            if (io.out.get(i).startsWith("KVITTO\n")) {
+                receiptCount++;
+                receiptIndex = i;
+            }
+        }
+
+        assertEquals(1, receiptCount);
+        assertEquals(CheckoutState.PRINTING_RECEIPT, io.statesAtPrint.get(receiptIndex));
+
+        String receipt = io.out.get(receiptIndex);
         assertTrue(receipt.contains("Piggelin"));
         assertTrue(receipt.contains("Godis"));
         assertTrue(receipt.contains("Totalt: 25,00 kr\nBetalt: 30,00 kr\nVäxel: 5,00 kr"));
